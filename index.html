@@ -1155,7 +1155,7 @@ footer {
         <div class="quiz-q-num" id="quizQNum">Question 1 / 10</div>
 
         <div id="quizPhase1">
-          <div class="quiz-phase-label">📖 Choose the word — Orwell's sentence</div>
+          <div class="quiz-phase-label">📖 Choose the word</div>
           <div class="quiz-sentence" id="quizSentence">—</div>
           <div class="quiz-choices" id="quizChoices"></div>
           <div class="quiz-feedback" id="quizFeedback"></div>
@@ -7155,17 +7155,39 @@ function renderQuestion() {
 
   document.getElementById('quizNextBtn').style.display = 'none';
 
+     document.getElementById('quizQNum').textContent =
+    'Word ' + (q.qIdx + 1) + ' / ' + total + ' · ' + (q.phase === 1 ? 'Part 1: Choose' : 'Part 2: Spell');
+  document.getElementById('quizProgressFill').style.width = ((step / totalSteps) * 100) + '%';
+  document.getElementById('quizNextBtn').style.display = 'none';
+
+  // FIXED for swapped data: Chinese sentence blanking in multiple choice
   if (q.phase === 1) {
     document.getElementById('quizPhase1').style.display = 'block';
     document.getElementById('quizPhase2').style.display = 'none';
 
-    document.getElementById('quizSentence').innerHTML = blankWord(entry.quote_en, entry.word);
-    // Show Chinese sentence (blanked) for learners
-    const quizZhDiv = document.createElement('div');
-    quizZhDiv.style.cssText = 'font-size: 1rem; color: var(--muted); margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--s20);';
-    quizZhDiv.innerHTML = blankWord(entry.quote_zh, entry.word);
-    document.getElementById('quizSentence').parentNode.appendChild(quizZhDiv);
+    const entry = q.questions[q.qIdx].entry;
 
+    // Blank the Chinese word in the Chinese sentence (quote_en)
+    let sentence = (entry.quote_en || entry.quote_zh || '');
+    const escaped = entry.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    sentence = sentence.replace(new RegExp(escaped, 'gi'), '_____');
+
+    const sentenceEl = document.getElementById('quizSentence');
+    if (sentenceEl) {
+      sentenceEl.innerHTML = sentence;
+    }
+
+    // Optional English translation hint below (muted)
+    let hintEl = document.getElementById('quizEnglishHint');
+    if (!hintEl && sentenceEl) {
+      hintEl = document.createElement('div');
+      hintEl.id = 'quizEnglishHint';
+      hintEl.style.cssText = 'font-size:0.95rem;color:var(--muted);margin-top:12px;padding-top:10px;border-top:1px solid var(--s20);line-height:1.5;';
+      sentenceEl.parentNode.appendChild(hintEl);
+    }
+    if (hintEl) hintEl.textContent = entry.quote_zh || '';
+
+    // Choices A B C D
     const group = GROUPS[S.gIdx];
     const distractors = shuffle(group.map(w => w.word).filter(w => w !== entry.word)).slice(0, 3);
     const choices = shuffle([entry.word, ...distractors]);
@@ -7187,6 +7209,7 @@ function renderQuestion() {
     q.answered = false;
 
   } else {
+    // Spelling phase (unchanged)
     document.getElementById('quizPhase1').style.display = 'none';
     document.getElementById('quizPhase2').style.display = 'block';
     renderQuizSpell(entry);
@@ -7194,10 +7217,14 @@ function renderQuestion() {
 }
 
 function renderQuizSpell(entry) {
-  const word = entry.word.toLowerCase();
-  document.getElementById('qSpellSentence').innerHTML = highlightWord(entry.ex_en, entry.word)
-    .replace(/<span class="hl">([^<]+)<\/span>/gi, '<span class="hl">_____<\/span>');
-
+  const word = entry.word;
+  
+  // FIXED: Simple regex blanking that works with Chinese
+  let sentence = entry.quote_en || '';
+  const escaped = entry.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  sentence = sentence.replace(new RegExp(escaped, 'gi'), '_____');
+  document.getElementById('qSpellSentence').innerHTML = sentence;
+  
   const boxes = document.getElementById('qSpellBoxes');
   boxes.innerHTML = '';
   for (let i = 0; i < word.length; i++) {
@@ -7213,9 +7240,11 @@ function renderQuizSpell(entry) {
       boxes.appendChild(b);
     }
   }
+  
   const inp = document.getElementById('qSpellInput');
   inp.value = '';
-  inp.placeholder = word.length + ' letters';
+  inp.placeholder = word.length + ' characters';
+  
   const fb = document.getElementById('qSpellFeedback');
   fb.style.display = 'none';
   fb.className = 'quiz-feedback';
@@ -7223,15 +7252,23 @@ function renderQuizSpell(entry) {
   updateQSpellBoxes('');
 }
 
+// Fix for Chinese: don't lowercase the word
 function updateQSpellBoxes(typed) {
   const entry = S.quiz.questions[S.quiz.qIdx].entry;
-  const word = entry.word.toLowerCase().replace(/-/g, '');
-  const t = typed.toLowerCase();
+  const word = entry.word.replace(/-/g, ''); // Remove hyphens but keep original case
+  const t = typed;
   const allBoxes = document.querySelectorAll('#qSpellBoxes .spell-box');
+  
   allBoxes.forEach((b, i) => {
     b.className = 'spell-box';
-    if (i < t.length) { b.textContent = t[i]; b.classList.add('filled'); }
-    else { b.textContent = ''; if (i === t.length) b.classList.add('cursor'); }
+    if (i < t.length) { 
+      b.textContent = t[i]; 
+      b.classList.add('filled'); 
+    }
+    else { 
+      b.textContent = ''; 
+      if (i === t.length) b.classList.add('cursor'); 
+    }
   });
 }
 
